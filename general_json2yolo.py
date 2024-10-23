@@ -30,7 +30,8 @@ def convert_infolks_json(name, files, img_path):
         f = glob.glob(img_path + Path(x['json_file']).stem + '.*')[0]
         file_name.append(f)
         wh.append(exif_size(Image.open(f)))  # (width, height)
-        cat.extend(a['classTitle'].lower() for a in x['output']['objects'])  # categories
+        cat.extend(a['classTitle'].lower()
+                   for a in x['output']['objects'])  # categories
 
         # filename
         with open(name + '.txt', 'a') as file:
@@ -54,12 +55,15 @@ def convert_infolks_json(name, files, img_path):
                 category_id = names.index(a['classTitle'].lower())
 
                 # The INFOLKS bounding box format is [x-min, y-min, x-max, y-max]
-                box = np.array(a['points']['exterior'], dtype=np.float32).ravel()
+                box = np.array(a['points']['exterior'],
+                               dtype=np.float32).ravel()
                 box[[0, 2]] /= wh[i][0]  # normalize x by width
                 box[[1, 3]] /= wh[i][1]  # normalize y by height
-                box = [box[[0, 2]].mean(), box[[1, 3]].mean(), box[2] - box[0], box[3] - box[1]]  # xywh
+                box = [box[[0, 2]].mean(), box[[1, 3]].mean(), box[2] -
+                       box[0], box[3] - box[1]]  # xywh
                 if (box[2] > 0.) and (box[3] > 0.):  # if w > 0 and h > 0
-                    file.write('%g %.6f %.6f %.6f %.6f\n' % (category_id, *box))
+                    file.write('%g %.6f %.6f %.6f %.6f\n' %
+                               (category_id, *box))
 
     # Split data into train, test, and validate files
     split_files(name, file_name)
@@ -119,13 +123,16 @@ def convert_vott_json(name, files, img_path):
 
                         # The INFOLKS bounding box format is [x-min, y-min, x-max, y-max]
                         box = a['boundingBox']
-                        box = np.array([box['left'], box['top'], box['width'], box['height']]).ravel()
+                        box = np.array(
+                            [box['left'], box['top'], box['width'], box['height']]).ravel()
                         box[[0, 2]] /= wh[0]  # normalize x by width
                         box[[1, 3]] /= wh[1]  # normalize y by height
-                        box = [box[0] + box[2] / 2, box[1] + box[3] / 2, box[2], box[3]]  # xywh
+                        box = [box[0] + box[2] / 2, box[1] +
+                               box[3] / 2, box[2], box[3]]  # xywh
 
                         if (box[2] > 0.) and (box[3] > 0.):  # if w > 0 and h > 0
-                            file.write('%g %.6f %.6f %.6f %.6f\n' % (category_id, *box))
+                            file.write('%g %.6f %.6f %.6f %.6f\n' %
+                                       (category_id, *box))
         else:
             missing_images.append(x['asset']['name'])
 
@@ -203,7 +210,8 @@ def convert_ath_json(json_dir):  # dir contains json annotations and images
                                        box[3]]  # xywh (left-top to center x-y)
 
                                 if box[2] > 0. and box[3] > 0.:  # if w > 0 and h > 0
-                                    file.write('%g %.6f %.6f %.6f %.6f\n' % (category_id, *box))
+                                    file.write('%g %.6f %.6f %.6f %.6f\n' %
+                                               (category_id, *box))
                                     n3 += 1
                                     nlabels += 1
 
@@ -219,7 +227,8 @@ def convert_ath_json(json_dir):  # dir contains json annotations and images
                         r = img_size / max(img.shape)  # size ratio
                         if r < 1:  # downsize if necessary
                             h, w, _ = img.shape
-                            img = cv2.resize(img, (int(w * r), int(h * r)), interpolation=cv2.INTER_AREA)
+                            img = cv2.resize(
+                                img, (int(w * r), int(h * r)), interpolation=cv2.INTER_AREA)
 
                         ifile = dir + 'images/' + Path(f).name
                         if cv2.imwrite(ifile, img):  # if success append image to list
@@ -251,13 +260,14 @@ def convert_ath_json(json_dir):  # dir contains json annotations and images
     print(f'Done. Output saved to {Path(dir).absolute()}')
 
 
-def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_keypoints=False, skip_iscrowd_1=False, rle_to_polygons_holes=False, save_rle_masks=False, cls91to80=False, category_id_starts_from_0=False):
+def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoints=False, num_keypoints=17, skip_iscrowd_1=False, rle_to_polygons_holes=False, save_rle_masks=False, cls91to80=False, category_id_starts_from_0=False):
     save_dir = make_dirs()  # output directory
     coco80 = coco91_to_coco80_class()
 
     # Import json
     for json_file in sorted(Path(json_dir).resolve().glob('*.json')):
-        fn = Path(save_dir) / 'labels' / json_file.stem.replace('instances_', '')  # folder name
+        fn = Path(save_dir) / 'labels' / \
+            json_file.stem.replace('instances_', '')  # folder name
         fn.mkdir()
         with open(json_file) as f:
             data = json.load(f)
@@ -273,14 +283,19 @@ def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_k
             show_kpt_shape_flip_idx(data)
 
         # Write labels file
-        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_file}'):
+        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_file.split("\\")[1]}'):
             img = images['%g' % img_id]
             h, w, f = img['height'], img['width'], img['file_name']
             f = f.split('/')[-1]
-            
+
             bboxes = []
             segments = []
-            keypoints = []
+            body_keypoints = []
+            if num_keypoints == 133:
+                foot_keypoints = []
+                face_keypoints = []
+                lefthand_keypoints = []
+                righthand_keypoints = []
             for ann in anns:
                 if skip_iscrowd_1 and "iscrowd" in ann and ann["iscrowd"]:
                     continue
@@ -300,20 +315,55 @@ def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_k
                 if category_id_starts_from_0:
                     cls = ann['category_id']
                 else:
-                    cls = coco80[ann['category_id'] - 1] if cls91to80 else ann['category_id'] - 1  # class
+                    cls = coco80[ann['category_id'] -
+                                 1] if cls91to80 else ann['category_id'] - 1  # class
                 box = [cls] + box.tolist()
                 bboxes.append(box)
-                set_coco_segments(use_segments, rle_to_polygons_holes, save_rle_masks, w, h, f, fn, ann, cls, segments)
-                set_coco_keypoints(use_keypoints, w, h, f, fn, ann, box, keypoints)
+                set_coco_segments(use_segments, rle_to_polygons_holes,
+                                  save_rle_masks, w, h, f, fn, ann, cls, segments)
+                set_coco_keypoints(use_keypoints, w, h,
+                                   ann, box, body_keypoints)
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, foot_keypoints, type="foot")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, face_keypoints, type="face")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, lefthand_keypoints, type="lefthand")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, righthand_keypoints, type="righthand")
 
             # Write
             with open((fn / f).with_suffix('.txt'), 'a') as file:
                 for i in range(len(bboxes)):
                     count = 0
-                    if use_keypoints and len(keypoints[i]) > 0:
-                        line = *(keypoints[i]),
-                        file.write(('%g ' * len(line)).rstrip() % line + '\n')
-                        count += 1
+                    if use_keypoints:
+                        if len(body_keypoints[i]) > 0:
+                            line = *(body_keypoints[i]),
+                            file.write(('%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(foot_keypoints[i]) > 0:
+                            line = *(foot_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(face_keypoints[i]) > 0:
+                            line = *(face_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(lefthand_keypoints[i]) > 0:
+                            line = *(lefthand_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(righthand_keypoints[i]) > 0:
+                            line = *(righthand_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        file.write('\n')
+
                     if use_segments and len(segments[i]) > 0:
                         line = *(segments[i]),
                         file.write(('%g ' * len(line)).rstrip() % line + '\n')
@@ -321,6 +371,7 @@ def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_k
                     if count == 0:
                         line = *(bboxes[i]),
                         file.write(('%g ' * len(line)).rstrip() % line + '\n')
+
 
 def set_coco_segments(use_segments, rle_to_polygons_holes, save_rle_masks, w, h, f, fn, ann, cls, segments):
     if not use_segments:
@@ -335,7 +386,8 @@ def set_coco_segments(use_segments, rle_to_polygons_holes, save_rle_masks, w, h,
         file_name = f.split('.')[0]
         file_name = file_name + '_' + str(len(segments)) + '.png'
         mask_path = (fn / file_name)
-        ann['segmentation'] = rle2polygon(ann['segmentation'], rle_to_polygons_holes, save_rle_masks, mask_path)
+        ann['segmentation'] = rle2polygon(
+            ann['segmentation'], rle_to_polygons_holes, save_rle_masks, mask_path)
         if len(ann['segmentation']) == 0:
             segments.append([])
             return
@@ -343,12 +395,15 @@ def set_coco_segments(use_segments, rle_to_polygons_holes, save_rle_masks, w, h,
         s = merge_multi_segment(ann['segmentation'])
         s = (np.concatenate(s, axis=0) / np.array([w, h])).reshape(-1).tolist()
     else:
-        s = [j for i in ann['segmentation'] for j in i]  # all segments concatenated
-        s = (np.array(s).reshape(-1, 2) / np.array([w, h])).reshape(-1).tolist()
+        s = [j for i in ann['segmentation']
+             for j in i]  # all segments concatenated
+        s = (np.array(s).reshape(-1, 2) /
+             np.array([w, h])).reshape(-1).tolist()
     s = [cls] + s
     segments.append(s)
 
-def set_coco_keypoints(use_keypoints, w, h, f, fn, ann, box, keypoints):
+
+def set_coco_keypoints(use_keypoints, w, h, ann, box, keypoints, type="default"):
     if not use_keypoints:
         return
     if 'keypoints' not in ann:
@@ -358,18 +413,39 @@ def set_coco_keypoints(use_keypoints, w, h, f, fn, ann, box, keypoints):
         keypoints.append([])
         return
     else:
-        k = (np.array(ann['keypoints']).reshape(-1, 3) / np.array([w, h, 1])).reshape(-1).tolist()
-        k = box + k
-        keypoints.append(k)
+        if type == "default":
+            k = (np.array(ann['keypoints']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            k = box + k
+            keypoints.append(k)
+        elif type == "foot":
+            k = (np.array(ann['foot_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "face":
+            k = (np.array(ann['face_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "lefthand":
+            k = (np.array(ann['lefthand_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "righthand":
+            k = (np.array(ann['righthand_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+
 
 def bbox_from_keypoints(ann):
     if 'keypoints' in ann:
         k = np.array(ann['keypoints']).reshape(-1, 3)
         x_list, y_list, v_list = zip(*k)
-        box = [min(x_list), min(y_list), max(x_list) - min(x_list), max(y_list) - min(y_list)]
+        box = [min(x_list), min(y_list), max(x_list) -
+               min(x_list), max(y_list) - min(y_list)]
         return np.array(box, dtype=np.float64)
     else:
         return [0, 0, 0, 0]
+
 
 def show_kpt_shape_flip_idx(data):
     if 'categories' not in data:
@@ -408,13 +484,15 @@ def is_clockwise(contour):
         value += (p2[0][0] - p1[0][0]) * (p2[0][1] + p1[0][1])
     return value < 0
 
+
 def get_merge_point_idx(contour1, contour2):
     idx1 = 0
     idx2 = 0
     distance_min = -1
     for i, p1 in enumerate(contour1):
         for j, p2 in enumerate(contour2):
-            distance = pow(p2[0][0] - p1[0][0], 2) + pow(p2[0][1] - p1[0][1], 2)
+            distance = pow(p2[0][0] - p1[0][0], 2) + \
+                pow(p2[0][1] - p1[0][1], 2)
             if distance_min < 0:
                 distance_min = distance
                 idx1 = i
@@ -424,6 +502,7 @@ def get_merge_point_idx(contour1, contour2):
                 idx1 = i
                 idx2 = j
     return idx1, idx2
+
 
 def merge_contours(contour1, contour2, idx1, idx2):
     contour = []
@@ -438,6 +517,7 @@ def merge_contours(contour1, contour2, idx1, idx2):
     contour = np.array(contour)
     return contour
 
+
 def merge_with_parent(contour_parent, contour):
     if not is_clockwise(contour_parent):
         contour_parent = contour_parent[::-1]
@@ -446,8 +526,10 @@ def merge_with_parent(contour_parent, contour):
     idx1, idx2 = get_merge_point_idx(contour_parent, contour)
     return merge_contours(contour_parent, contour, idx1, idx2)
 
+
 def mask2polygon_external(image):
-    contours, hierarchies = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
+    contours, hierarchies = cv2.findContours(
+        image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
     if len(contours) == 0:
         return []
     contours_approx = []
@@ -460,10 +542,12 @@ def mask2polygon_external(image):
         if len(contour) >= 3:
             polygon = contour.flatten().tolist()
             polygons.append(polygon)
-    return polygons 
+    return polygons
+
 
 def mask2polygon_holes(image):
-    contours, hierarchies = cv2.findContours(image, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
+    contours, hierarchies = cv2.findContours(
+        image, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_TC89_KCOS)
     if len(contours) == 0:
         return []
     contours_approx = []
@@ -484,7 +568,8 @@ def mask2polygon_holes(image):
             contour_parent = contours_parent[parent_idx]
             if len(contour_parent) == 0:
                 continue
-            contours_parent[parent_idx] = merge_with_parent(contour_parent, contour)
+            contours_parent[parent_idx] = merge_with_parent(
+                contour_parent, contour)
     contours_parent_tmp = []
     for contour in contours_parent:
         if len(contour) == 0:
@@ -494,12 +579,13 @@ def mask2polygon_holes(image):
     for contour in contours_parent_tmp:
         polygon = contour.flatten().tolist()
         polygons.append(polygon)
-    return polygons 
+    return polygons
+
 
 def rle2polygon(segmentation, rle_to_polygons_holes, save_rle_masks, mask_path):
     if isinstance(segmentation["counts"], list):
         segmentation = mask.frPyObjects(segmentation, *segmentation["size"])
-    m = mask.decode(segmentation) 
+    m = mask.decode(segmentation)
     m[m > 0] = 255
     if save_rle_masks:
         import PIL.Image
@@ -510,6 +596,7 @@ def rle2polygon(segmentation, rle_to_polygons_holes, save_rle_masks, mask_path):
     else:
         polygons = mask2polygon_external(m)
     return polygons
+
 
 def min_index(arr1, arr2):
     """Find a pair of indexes with the shortest distance. 
@@ -586,10 +673,11 @@ if __name__ == '__main__':
     source = 'COCO'
 
     if source == 'COCO':
-        convert_coco_json('../datasets/coco/annotations',  # directory with *.json
-                          use_segments=True,
+        convert_coco_json('../annotations',  # directory with *.json
+                          use_segments=False,
                           use_keypoints=True,
-                          skip_iscrowd_1=False,
+                          num_keypoints=133,
+                          skip_iscrowd_1=True,
                           rle_to_polygons_holes=False,
                           save_rle_masks=False,
                           cls91to80=False,
