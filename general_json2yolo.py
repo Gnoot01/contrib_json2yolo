@@ -260,7 +260,7 @@ def convert_ath_json(json_dir):  # dir contains json annotations and images
     print(f'Done. Output saved to {Path(dir).absolute()}')
 
 
-def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_keypoints=False, skip_iscrowd_1=False, rle_to_polygons_holes=False, save_rle_masks=False, cls91to80=False, category_id_starts_from_0=False):
+def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoints=False, num_keypoints=17, skip_iscrowd_1=False, rle_to_polygons_holes=False, save_rle_masks=False, cls91to80=False, category_id_starts_from_0=False):
     save_dir = make_dirs()  # output directory
     coco80 = coco91_to_coco80_class()
 
@@ -283,14 +283,19 @@ def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_k
             show_kpt_shape_flip_idx(data)
 
         # Write labels file
-        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_file}'):
+        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_file.split("\\")[1]}'):
             img = images['%g' % img_id]
             h, w, f = img['height'], img['width'], img['file_name']
             f = f.split('/')[-1]
 
             bboxes = []
             segments = []
-            keypoints = []
+            body_keypoints = []
+            if num_keypoints == 133:
+                foot_keypoints = []
+                face_keypoints = []
+                lefthand_keypoints = []
+                righthand_keypoints = []
             for ann in anns:
                 if skip_iscrowd_1 and "iscrowd" in ann and ann["iscrowd"]:
                     continue
@@ -316,17 +321,49 @@ def convert_coco_json(json_dir='../coco/annotations/', use_segments=False, use_k
                 bboxes.append(box)
                 set_coco_segments(use_segments, rle_to_polygons_holes,
                                   save_rle_masks, w, h, f, fn, ann, cls, segments)
-                set_coco_keypoints(use_keypoints, w, h, f,
-                                   fn, ann, box, keypoints)
+                set_coco_keypoints(use_keypoints, w, h,
+                                   ann, box, body_keypoints)
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, foot_keypoints, type="foot")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, face_keypoints, type="face")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, lefthand_keypoints, type="lefthand")
+                set_coco_keypoints(use_keypoints, w, h, ann,
+                                   box, righthand_keypoints, type="righthand")
 
             # Write
             with open((fn / f).with_suffix('.txt'), 'a') as file:
                 for i in range(len(bboxes)):
                     count = 0
-                    if use_keypoints and len(keypoints[i]) > 0:
-                        line = *(keypoints[i]),
-                        file.write(('%g ' * len(line)).rstrip() % line + '\n')
-                        count += 1
+                    if use_keypoints:
+                        if len(body_keypoints[i]) > 0:
+                            line = *(body_keypoints[i]),
+                            file.write(('%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(foot_keypoints[i]) > 0:
+                            line = *(foot_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(face_keypoints[i]) > 0:
+                            line = *(face_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(lefthand_keypoints[i]) > 0:
+                            line = *(lefthand_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        if len(righthand_keypoints[i]) > 0:
+                            line = *(righthand_keypoints[i]),
+                            file.write((' ' + '%g ' * len(line)).rstrip() %
+                                       line)
+                            count += 1
+                        file.write('\n')
+
                     if use_segments and len(segments[i]) > 0:
                         line = *(segments[i]),
                         file.write(('%g ' * len(line)).rstrip() % line + '\n')
@@ -366,7 +403,7 @@ def set_coco_segments(use_segments, rle_to_polygons_holes, save_rle_masks, w, h,
     segments.append(s)
 
 
-def set_coco_keypoints(use_keypoints, w, h, f, fn, ann, box, keypoints):
+def set_coco_keypoints(use_keypoints, w, h, ann, box, keypoints, type="default"):
     if not use_keypoints:
         return
     if 'keypoints' not in ann:
@@ -376,10 +413,27 @@ def set_coco_keypoints(use_keypoints, w, h, f, fn, ann, box, keypoints):
         keypoints.append([])
         return
     else:
-        k = (np.array(ann['keypoints']).reshape(-1, 3) /
-             np.array([w, h, 1])).reshape(-1).tolist()
-        k = box + k
-        keypoints.append(k)
+        if type == "default":
+            k = (np.array(ann['keypoints']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            k = box + k
+            keypoints.append(k)
+        elif type == "foot":
+            k = (np.array(ann['foot_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "face":
+            k = (np.array(ann['face_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "lefthand":
+            k = (np.array(ann['lefthand_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
+        elif type == "righthand":
+            k = (np.array(ann['righthand_kpts']).reshape(-1, 3) /
+                 np.array([w, h, 1])).reshape(-1).tolist()
+            keypoints.append(k)
 
 
 def bbox_from_keypoints(ann):
@@ -619,10 +673,11 @@ if __name__ == '__main__':
     source = 'COCO'
 
     if source == 'COCO':
-        convert_coco_json('../datasets/coco/annotations',  # directory with *.json
-                          use_segments=True,
+        convert_coco_json('../annotations',  # directory with *.json
+                          use_segments=False,
                           use_keypoints=True,
-                          skip_iscrowd_1=False,
+                          num_keypoints=133,
+                          skip_iscrowd_1=True,
                           rle_to_polygons_holes=False,
                           save_rle_masks=False,
                           cls91to80=False,
