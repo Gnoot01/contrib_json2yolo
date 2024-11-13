@@ -261,6 +261,8 @@ def convert_ath_json(json_dir):  # dir contains json annotations and images
 
 
 def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoints=False, num_keypoints=17, skip_iscrowd_1=False, rle_to_polygons_holes=False, save_rle_masks=False, cls91to80=False, category_id_starts_from_0=False):
+
+    assert num_keypoints in [17, 23, 133], 'num_keypoints must be 17, 23 or 133'
     save_dir = make_dirs()  # output directory
     coco80 = coco91_to_coco80_class()
 
@@ -282,9 +284,12 @@ def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoi
         if use_keypoints:
             show_kpt_shape_flip_idx(data)
 
-        # Write labels file
+        # Convert backslashes to forward slashes
+        # Convert the Path object to a POSIX-style string with forward slashes
         json_filename = json_file.as_posix().split("/")[1]
+
         for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_filename}'):
+
             img = images['%g' % img_id]
             h, w, f = img['height'], img['width'], img['file_name']
             f = f.split('/')[-1]
@@ -322,47 +327,53 @@ def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoi
                 bboxes.append(box)
                 set_coco_segments(use_segments, rle_to_polygons_holes,
                                   save_rle_masks, w, h, f, fn, ann, cls, segments)
-                set_coco_keypoints(use_keypoints, w, h,
-                                   ann, box, body_keypoints)
-                set_coco_keypoints(use_keypoints, w, h, ann,
-                                   box, foot_keypoints, type="foot")
-                set_coco_keypoints(use_keypoints, w, h, ann,
-                                   box, face_keypoints, type="face")
-                set_coco_keypoints(use_keypoints, w, h, ann,
-                                   box, lefthand_keypoints, type="lefthand")
-                set_coco_keypoints(use_keypoints, w, h, ann,
-                                   box, righthand_keypoints, type="righthand")
+                if num_keypoints >= 17:
+                    set_coco_keypoints(use_keypoints, w, h,
+                                       ann, box, body_keypoints)
+                if num_keypoints >= 23:
+                    set_coco_keypoints(use_keypoints, w, h,
+                                       ann, box, foot_keypoints, type="foot")
+                if num_keypoints == 133:
+                    set_coco_keypoints(use_keypoints, w, h,
+                                       ann, box, face_keypoints, type="face")
+                    set_coco_keypoints(use_keypoints, w, h,
+                                       ann, box, lefthand_keypoints, type="lefthand")
+                    set_coco_keypoints(use_keypoints, w, h,
+                                       ann, box, righthand_keypoints, type="righthand")
 
             # Write
             with open((fn / f).with_suffix('.txt'), 'a') as file:
                 for i in range(len(bboxes)):
                     count = 0
                     if use_keypoints:
-                        if len(body_keypoints[i]) > 0:
-                            line = *(body_keypoints[i]),
-                            file.write(('%g ' * len(line)).rstrip() %
-                                       line)
+                        if num_keypoints >= 17:
+                            if len(body_keypoints[i]) > 0:
+                                line = *(body_keypoints[i]),
+                                file.write(('%g ' * len(line)).rstrip() % line)
+                                count += 1
+                        if num_keypoints >= 23:
+                            if len(foot_keypoints[i]) > 0:
+                                line = *(foot_keypoints[i]),
+                                file.write((' ' + '%g ' * len(line)).rstrip() %
+                                           line)
+                                count += 1
                             count += 1
-                        if len(foot_keypoints[i]) > 0:
-                            line = *(foot_keypoints[i]),
-                            file.write((' ' + '%g ' * len(line)).rstrip() %
-                                       line)
-                            count += 1
-                        if len(face_keypoints[i]) > 0:
-                            line = *(face_keypoints[i]),
-                            file.write((' ' + '%g ' * len(line)).rstrip() %
-                                       line)
-                            count += 1
-                        if len(lefthand_keypoints[i]) > 0:
-                            line = *(lefthand_keypoints[i]),
-                            file.write((' ' + '%g ' * len(line)).rstrip() %
-                                       line)
-                            count += 1
-                        if len(righthand_keypoints[i]) > 0:
-                            line = *(righthand_keypoints[i]),
-                            file.write((' ' + '%g ' * len(line)).rstrip() %
-                                       line)
-                            count += 1
+                        if num_keypoints == 133:
+                            if len(face_keypoints[i]) > 0:
+                                line = *(face_keypoints[i]),
+                                file.write((' ' + '%g ' * len(line)).rstrip() %
+                                           line)
+                                count += 1
+                            if len(lefthand_keypoints[i]) > 0:
+                                line = *(lefthand_keypoints[i]),
+                                file.write((' ' + '%g ' * len(line)).rstrip() %
+                                           line)
+                                count += 1
+                            if len(righthand_keypoints[i]) > 0:
+                                line = *(righthand_keypoints[i]),
+                                file.write((' ' + '%g ' * len(line)).rstrip() %
+                                           line)
+                                count += 1
                         file.write('\n')
 
                     if use_segments and len(segments[i]) > 0:
@@ -600,7 +611,7 @@ def rle2polygon(segmentation, rle_to_polygons_holes, save_rle_masks, mask_path):
 
 
 def min_index(arr1, arr2):
-    """Find a pair of indexes with the shortest distance. 
+    """Find a pair of indexes with the shortest distance.
     Args:
         arr1: (N, 2).
         arr2: (M, 2).
@@ -614,12 +625,12 @@ def min_index(arr1, arr2):
 def merge_multi_segment(segments):
     """Merge multi segments to one list.
     Find the coordinates with min distance between each segment,
-    then connect these coordinates with one thin line to merge all 
+    then connect these coordinates with one thin line to merge all
     segments into one.
 
     Args:
         segments(List(List)): original segmentations in coco's json file.
-            like [segmentation1, segmentation2,...], 
+            like [segmentation1, segmentation2,...],
             each segmentation is a list of coordinates.
     """
     s = []
@@ -674,7 +685,7 @@ if __name__ == '__main__':
     source = 'COCO'
 
     if source == 'COCO':
-        convert_coco_json('../annotations',  # directory with *.json
+        convert_coco_json('/home/selim/Documents/coco-wholebody/annotations',  # directory with *.json
                           use_segments=False,
                           use_keypoints=True,
                           num_keypoints=133,
