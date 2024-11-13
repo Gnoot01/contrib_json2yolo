@@ -283,7 +283,8 @@ def convert_coco_json(json_dir='../annotations/', use_segments=False, use_keypoi
             show_kpt_shape_flip_idx(data)
 
         # Write labels file
-        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_file.split("\\")[1]}'):
+        json_filename = json_file.as_posix().split("/")[1]
+        for img_id, anns in tqdm(imgToAnns.items(), desc=f'Annotations {json_filename}'):
             img = images['%g' % img_id]
             h, w, f = img['height'], img['width'], img['file_name']
             f = f.split('/')[-1]
